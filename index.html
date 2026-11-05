@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Naija Billings</title>
+        <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0b1120">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon-512.png">
+    <script src="./html2pdf.bundle.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0b1120; --sidebar-bg: #0f172a; --panel-bg: #1e293b;
+            --text-main: #f8fafc; --text-muted: #94a3b8; --primary: #22c55e;
+            --primary-hover: #16a34a; --border: #334155;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-main); height: 100vh; display: flex; overflow: hidden; }
+        
+        /* Sidebar */
+        .sidebar { width: 250px; background-color: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px 0; }
+        .sidebar-logo { padding: 0 20px 20px 20px; font-size: 1.5rem; font-weight: bold; color: var(--primary); display: flex; align-items: center; gap: 10px; }
+        .sidebar-logo span { font-size: 0.8rem; color: var(--text-muted); display: block; font-weight: normal; }
+        .nav-item { padding: 15px 20px; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; gap: 10px; font-weight: 500; transition: 0.2s; }
+        .nav-item:hover, .nav-item.active { background-color: var(--panel-bg); color: var(--text-main); border-left: 4px solid var(--primary); }
+        
+        /* Main App Area */
+        .app-container { display: flex; flex: 1; overflow: hidden; }
+        
+        /* Left Panels */
+        .form-panel { width: 45%; padding: 30px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        #view-settings, #view-history { display: none; } 
+        
+        h2 { font-size: 1.1rem; margin-bottom: 5px; color: var(--primary); }
+        .form-group { display: flex; flex-direction: column; gap: 5px; }
+        .form-group label { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
+        .form-group input, .form-group select, .form-group textarea { padding: 10px; border-radius: 6px; border: 1px solid var(--border); background-color: var(--panel-bg); color: var(--text-main); outline: none; font-family: inherit; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--primary); }
+        .form-group textarea { resize: vertical; min-height: 60px; }
+        
+        .file-upload { background-color: var(--panel-bg); border: 1px dashed var(--text-muted); padding: 8px; border-radius: 6px; color: var(--text-muted); font-size: 0.8rem; cursor: pointer; }
+
+        /* Line Items */
+        .item-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+        .item-row input { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background-color: var(--panel-bg); color: var(--text-main); }
+        .item-row input.qty { width: 60px; flex: none; }
+        .item-row input.rate { width: 90px; flex: none; }
+        .btn-delete { background-color: transparent; color: #ef4444; border: 1px solid #ef4444; border-radius: 6px; width: 36px; height: 36px; cursor: pointer; font-weight: bold; font-size: 1rem; display: flex; justify-content: center; align-items: center; }
+        .btn-delete:hover { background-color: #ef4444; color: white; }
+        .btn-add { background-color: var(--panel-bg); color: var(--primary); border: 1px dashed var(--primary); padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 600; margin-bottom: 15px; }
+        .btn-add:hover { background-color: var(--border); }
+        
+        .btn { padding: 12px; border: none; border-radius: 6px; background-color: var(--primary); color: white; font-weight: bold; cursor: pointer; font-size: 1rem; transition: background 0.2s; }
+        .btn:hover { background-color: var(--primary-hover); }
+        .btn-secondary { background-color: #3b82f6; } 
+        .btn-secondary:hover { background-color: #2563eb; }
+        .btn-reset { background-color: transparent; border: 1px solid var(--border); color: var(--text-muted); margin-top: 5px; }
+
+        /* Preview Panel */
+        .preview-panel { width: 55%; background-color: #cbd5e1; padding: 40px; display: flex; justify-content: center; overflow-y: auto; }
+        .invoice-paper { background-color: white; width: 100%; max-width: 650px; min-height: 850px; border-radius: 8px; box-shadow: 0 20px 40px rgba(0,0,0,0.15); padding: 50px; color: #333; display: flex; flex-direction: column; position: relative; overflow: hidden;}
+        
+        /* --- THEMES --- */
+        .theme-blue { --doc-primary: #3b82f6; --doc-bg: #eff6ff; --doc-text: #1e3a8a; --doc-header-bg: #1e3a8a; }
+        .theme-green { --doc-primary: #22c55e; --doc-bg: #e8f5e9; --doc-text: #1b5e20; --doc-header-bg: #0f172a; }
+        .theme-gold { --doc-primary: #eab308; --doc-bg: #fefce8; --doc-text: #854d0e; --doc-header-bg: #422006; }
+
+        /* --- FIXED HEADER LAYOUT --- */
+        .invoice-header { display: flex; justify-content: space-between; border-bottom: 2px solid #eee; padding-bottom: 25px; margin-bottom: 30px; gap: 20px; flex-wrap: wrap; }
+        .header-left { display: flex; gap: 15px; align-items: center; flex: 1 1 50%; min-width: 0; }
+        .header-left-text { display: flex; flex-direction: column; min-width: 0; flex: 1; } 
+        .company-logo-img { max-height: 65px; max-width: 120px; object-fit: contain; flex-shrink: 0; }
+        .invoice-brand { font-size: 1.6rem; font-weight: 900; color: #1a2e44; line-height: 1.2; word-wrap: break-word; overflow-wrap: break-word; word-break: break-word; }
+        .invoice-tagline { font-size: 0.75rem; color: var(--doc-primary); font-weight: bold; text-transform: uppercase; margin-top: 4px; word-wrap: break-word; overflow-wrap: break-word; }
+        
+        .invoice-title-box { text-align: right; flex: 1 1 40%; min-width: 150px; }
+        .invoice-title { font-size: 2.2rem; font-weight: 900; color: var(--doc-text); letter-spacing: 1px; line-height: 1.1; }
+        .invoice-meta { font-size: 0.85rem; color: #666; line-height: 1.6; margin-top: 8px; }
+        
+        .info-blocks { display: flex; justify-content: space-between; margin-bottom: 30px; gap: 20px; }
+        .info-block { width: 48%; min-width: 0; }
+        .info-block.right-align { text-align: right; }
+        .info-title { font-size: 0.75rem; color: #888; text-transform: uppercase; font-weight: bold; margin-bottom: 8px; letter-spacing: 0.5px; }
+        .info-text { font-size: 0.9rem; line-height: 1.5; color: #333; word-wrap: break-word; overflow-wrap: break-word; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th { background-color: var(--doc-header-bg); color: white; text-align: left; padding: 12px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 0.9rem; word-wrap: break-word; overflow-wrap: break-word; }
+        .text-right { text-align: right; }
+        .col-desc { width: 45%; } .col-qty { width: 15%; } .col-rate { width: 20%; } .col-amount { width: 20%; }
+        
+        .total-box { display: flex; justify-content: flex-end; margin-top: 20px; }
+        .total-inner { background-color: var(--doc-bg); color: var(--doc-text); padding: 15px 25px; border-radius: 8px; font-size: 1.3rem; font-weight: 900; border: 1px solid var(--doc-primary); }
+        
+        .invoice-footer { margin-top: auto; border-top: 1px solid #eee; padding-top: 20px; display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; }
+        .footer-payment { flex: 1; min-width: 0; }
+        .payment-title { font-size: 0.7rem; color: #888; text-transform: uppercase; font-weight: bold; margin-bottom: 5px; }
+        .payment-text { font-size: 0.8rem; color: #333; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; }
+        
+        .signature-box { text-align: center; flex-shrink: 0; }
+        .signature-img { max-height: 60px; max-width: 150px; object-fit: contain; margin-bottom: 5px; }
+        .signature-line { border-top: 1px solid #333; padding-top: 5px; font-size: 0.8rem; color: #333; font-weight: bold; }
+
+        /* --- PAID STAMP --- */
+        .paid-stamp {
+            position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%) rotate(-25deg);
+            font-size: 6rem; font-weight: 900; color: rgba(239, 68, 68, 0.3); border: 10px solid rgba(239, 68, 68, 0.3);
+            border-radius: 15px; padding: 10px 40px; display: none; pointer-events: none; z-index: 10; letter-spacing: 5px;
+        }
+
+        /* --- HISTORY ITEM STYLES --- */
+        .history-card {
+            background-color: var(--panel-bg); border: 1px solid var(--border); border-radius: 8px;
+            padding: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;
+        }
+        .history-info h3 { font-size: 1rem; color: var(--primary); margin-bottom: 5px; }
+        .history-info p { font-size: 0.85rem; color: var(--text-muted); }
+        .history-actions { display: flex; gap: 10px; }
+        .btn-small { padding: 6px 12px; font-size: 0.8rem; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; color: white; }
+
+        /* --- RESPONSIVE DESIGN --- */
+        @media (max-width: 1100px) {
+            .app-container { flex-direction: column; overflow-y: auto; }
+            .form-panel { width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+            .preview-panel { width: 100%; padding: 20px; }
+            .sidebar { width: 80px; align-items: center; }
+            .sidebar-logo div, .nav-item span { display: none; }
+            .nav-item { justify-content: center; padding: 15px 0; font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-logo">
+            <div>Naija<span>Billings</span></div>
+        </div>
+        <div class="nav-item active" id="nav-dashboard" onclick="switchTab('dashboard')">🏠 <span>Dashboard</span></div>
+        <div class="nav-item" id="nav-history" onclick="switchTab('history')">📄 <span>History</span></div>
+        <div class="nav-item" onclick="alert('Client Management is coming soon!')">👥 <span>Clients</span></div>
+        <div class="nav-item" id="nav-settings" onclick="switchTab('settings')">⚙️ <span>Settings</span></div>
+                <a href="https://drive.google.com/file/d/1D10DSTf0dW2wBBHU4zV20ng2EBuLpNf4/view?usp=drive_link" target="_blank" style="text-decoration: none; color: var(--text-muted); padding: 15px 20px; display: flex; align-items: center; gap: 10px; font-weight: 500;">
+            ⬇️ <span>Get Desktop App</span>
+        </a>
+    </div>
+
+    <div class="app-container">
+        <div class="form-panel" id="view-dashboard">
+            <h2>Create Document</h2>
+            
+            <div class="form-group" style="margin-bottom: 5px;">
+                <label>Document Type</label>
+                <select id="input-doc-type">
+                    <option value="QUOTATION">Quotation (Estimate)</option>
+                    <option value="INVOICE">Invoice</option>
+                    <option value="RECEIPT">Receipt</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Client Name</label>
+                <input type="text" id="input-client" placeholder="e.g. ABC Enterprises Ltd">
+            </div>
+            
+            <div style="display: flex; gap: 10px;">
+                <div class="form-group" style="flex: 1;">
+                    <label>Document No.</label>
+                    <input type="text" id="input-inv-num" placeholder="INV-001">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Date</label>
+                    <input type="date" id="input-date">
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <div class="form-group" style="flex: 1;">
+                    <label>Due Date (Optional)</label>
+                    <input type="date" id="input-due-date">
+                </div>
+            </div>
+
+            <h2 style="margin-top: 10px;">Line Items</h2>
+            <div id="items-container"></div>
+            <button class="btn-add" id="btn-add-item">+ Add Item</button>
+
+            <button class="btn btn-secondary" id="btn-save-history">Save to History</button>
+            <button class="btn" id="btn-generate">Download PDF</button>
+            <button class="btn btn-reset" id="btn-reset">Reset Document</button>
+        </div>
+
+        <div class="form-panel" id="view-settings">
+            <h2>Business Profile Settings</h2>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">These details are saved automatically and will appear on every document.</p>
+            
+            <div class="form-group">
+                <label>Company Logo (PNG/JPG)</label>
+                <input type="file" id="input-logo" accept="image/*" class="file-upload">
+            </div>
+            <div class="form-group">
+                <label>Business Name</label>
+                <input type="text" id="input-business" placeholder="e.g. SmartBot Builds">
+            </div>
+            <div class="form-group">
+                <label>Slogan</label>
+                <input type="text" id="input-slogan" placeholder="e.g. Smart Business. Greater Growth.">
+            </div>
+            <div class="form-group">
+                <label>Address</label>
+                <input type="text" id="input-address" placeholder="e.g. 12 Business Avenue, Lagos">
+            </div>
+            <div class="form-group">
+                <label>Phone Number</label>
+                <input type="text" id="input-phone" placeholder="e.g. +234 801 234 5678">
+            </div>
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="text" id="input-email" placeholder="e.g. hello@mybusiness.com">
+            </div>
+            <div class="form-group">
+                <label>Payment Details / Bank Info</label>
+                <textarea id="input-payment" placeholder="e.g. Bank: GTBank&#10;Account Name: SmartBot Builds&#10;Account No: 0123456789"></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label>Signature Image (Optional)</label>
+                <input type="file" id="input-signature" accept="image/*" class="file-upload">
+            </div>
+            
+            <button class="btn" onclick="switchTab('dashboard')">Back to Dashboard</button>
+        </div>
+
+        <div class="form-panel" id="view-history">
+            <h2>Document History</h2>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">Load or convert your saved documents below.</p>
+            <div id="history-list"></div>
+            <button class="btn" onclick="switchTab('dashboard')" style="margin-top: 20px;">Back to Dashboard</button>
+        </div>
+
+        <div class="preview-panel">
+            <div class="invoice-paper theme-blue" id="invoice-paper">
+                <div class="paid-stamp" id="paid-stamp">PAID</div>
+                <div class="invoice-header">
+                    <div class="header-left">
+                        <img id="preview-logo" class="company-logo-img" src="" style="display: none;">
+                        <div class="header-left-text">
+                            <div class="invoice-brand" id="preview-business">Your Business Name</div>
+                            <div class="invoice-tagline" id="preview-slogan">Your Slogan Here</div>
+                        </div>
+                    </div>
+                    <div class="invoice-title-box">
+                        <div class="invoice-title" id="preview-doc-title">QUOTATION</div>
+                        <div class="invoice-meta">
+                            <div><strong>Doc No:</strong> <span id="preview-inv-num">Q-001</span></div>
+                            <div><strong>Date:</strong> <span id="preview-date">--/--/----</span></div>
+                            <div id="preview-due-container" style="display: none;"><strong>Due Date:</strong> <span id="preview-due-date">--/--/----</span></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="info-blocks">
+                    <div class="info-block">
+                        <div class="info-title">Billed To:</div>
+                        <div class="info-text" style="font-weight: bold; font-size: 1rem;" id="preview-client">Client Name</div>
+                    </div>
+                    <div class="info-block right-align">
+                        <div class="info-title">From:</div>
+                        <div class="info-text" id="preview-address">Your Address</div>
+                        <div class="info-text" id="preview-phone">Your Phone</div>
+                        <div class="info-text" id="preview-email">Your Email</div>
+                    </div>
+                </div>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="col-desc">Description</th>
+                            <th class="col-qty text-right">Qty</th>
+                            <th class="col-rate text-right">Rate (₦)</th>
+                            <th class="col-amount text-right">Amount (₦)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="preview-items"></tbody>
+                </table>
+
+                <div class="total-box">
+                    <div class="total-inner">
+                        <span id="preview-total-label">Estimated Total</span>: ₦<span id="preview-grand-total">0.00</span>
+                    </div>
+                </div>
+
+                <div class="invoice-footer">
+                    <div class="footer-payment" id="preview-payment-container">
+                        <div class="payment-title">Payment Details</div>
+                        <div class="payment-text" id="preview-payment">Bank Name: GTBank<br>Account Name: Your Business<br>Account No: 0123456789</div>
+                    </div>
+                    <div class="signature-box">
+                        <img id="preview-signature" class="signature-img" src="" style="display: none;">
+                        <div class="signature-line">Authorized Signature</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- FIX 1: GLOBAL SCOPE FOR HISTORY ---
+        function switchTab(tab) {
+            document.getElementById('view-dashboard').style.display = tab === 'dashboard' ? 'flex' : 'none';
+            document.getElementById('view-settings').style.display = tab === 'settings' ? 'flex' : 'none';
+            document.getElementById('view-history').style.display = tab === 'history' ? 'flex' : 'none';
+            
+            document.getElementById('nav-dashboard').classList.toggle('active', tab === 'dashboard');
+            document.getElementById('nav-settings').classList.toggle('active', tab === 'settings');
+            document.getElementById('nav-history').classList.toggle('active', tab === 'history');
+
+            if (tab === 'history') window.renderHistoryList();
+        }
+
+        window.renderHistoryList = function() {
+            const historyList = document.getElementById('history-list');
+            if(!historyList) return;
+            historyList.innerHTML = '';
+            let history = JSON.parse(localStorage.getItem('naijaBillingHistory')) || [];
+
+            if (history.length === 0) {
+                historyList.innerHTML = '<p style="color: var(--text-muted); text-align: center; margin-top: 20px;">No saved documents yet.</p>';
+                return;
+            }
+
+            // Reverse to show newest first
+            const reversedHistory = [...history].reverse();
+
+            reversedHistory.forEach(doc => {
+                const dateStr = doc.date ? new Date(doc.date).toLocaleDateString() : 'No Date';
+                const div = document.createElement('div');
+                div.className = 'history-card';
+                div.innerHTML = `
+                    <div class="history-info">
+                        <h3>${doc.docNum} - ${doc.client}</h3>
+                        <p>${doc.type} | ${dateStr}</p>
+                    </div>
+                    <div class="history-actions">
+                        <button class="btn-small btn-secondary" onclick="window.loadHistoryDoc(${doc.id})">Load</button>
+                        <button class="btn-small" style="background-color: var(--primary);" onclick="window.convertHistoryDoc(${doc.id})">Convert</button>
+                    </div>
+                `;
+                historyList.appendChild(div);
+            });
+        };
+
+        window.loadHistoryDoc = function(id) {
+            const history = JSON.parse(localStorage.getItem('naijaBillingHistory')) || [];
+            const doc = history.find(d => d.id === id);
+            if (!doc) return;
+
+            document.getElementById('input-doc-type').value = doc.type;
+            document.getElementById('input-client').value = doc.client;
+            document.getElementById('input-inv-num').value = doc.docNum;
+            document.getElementById('input-date').value = doc.date;
+            document.getElementById('input-due-date').value = doc.dueDate || '';
+            
+            document.querySelectorAll('.item-row').forEach(el => el.remove());
+            document.querySelectorAll('#preview-items tr').forEach(el => el.remove());
+            window.itemIdCounter = 0;
+
+            doc.items.forEach(item => window.addItemRow(item.desc, item.qty, item.rate));
+            
+            document.getElementById('preview-client').innerText = doc.client;
+            document.getElementById('preview-inv-num').innerText = doc.docNum;
+            document.getElementById('preview-date').innerText = window.formatDate(doc.date);
+            document.getElementById('preview-due-date').innerText = window.formatDate(doc.dueDate);
+            
+            if (doc.dueDate && doc.type !== 'RECEIPT') document.getElementById('preview-due-container').style.display = 'block';
+            else document.getElementById('preview-due-container').style.display = 'none';
+
+            window.updateDocType();
+            window.calculateGrandTotal();
+            switchTab('dashboard');
+        };
+
+        window.convertHistoryDoc = function(id) {
+            const history = JSON.parse(localStorage.getItem('naijaBillingHistory')) || [];
+            const doc = history.find(d => d.id === id);
+            if (!doc) return;
+
+            let newType = 'INVOICE';
+            let newPrefix = 'INV';
+            if (doc.type === 'INVOICE') {
+                newType = 'RECEIPT';
+                newPrefix = 'REC';
+            } else if (doc.type === 'RECEIPT') {
+                alert("A receipt cannot be converted further.");
+                return;
+            }
+
+            doc.type = newType;
+            doc.docNum = `${newPrefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+            const index = history.findIndex(d => d.id === id);
+            history[index] = doc;
+            localStorage.setItem('naijaBillingHistory', JSON.stringify(history));
+
+            window.loadHistoryDoc(id);
+            alert(`Converted to ${newType} and loaded into Dashboard!`);
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const inputDocType = document.getElementById('input-doc-type');
+            const previewDocTitle = document.getElementById('preview-doc-title');
+            const previewTotalLabel = document.getElementById('preview-total-label');
+            const inputDueDate = document.getElementById('input-due-date');
+            const previewDueContainer = document.getElementById('preview-due-container');
+            const previewDueDate = document.getElementById('preview-due-date');
+            const paper = document.getElementById('invoice-paper');
+            const stamp = document.getElementById('paid-stamp');
+            const paymentContainer = document.getElementById('preview-payment-container');
+
+            // 1. Dynamic Document Type & Theme
+            window.updateDocType = function() {
+                const type = inputDocType.value;
+                previewDocTitle.innerText = type;
+                paper.classList.remove('theme-blue', 'theme-green', 'theme-gold');
+                stamp.style.display = 'none';
+                paymentContainer.style.display = 'block';
+
+                if (type === 'QUOTATION') {
+                    paper.classList.add('theme-blue');
+                    previewTotalLabel.innerText = 'Estimated Total';
+                    if (inputDueDate.value) previewDueContainer.style.display = 'block';
+                } else if (type === 'RECEIPT') {
+                    paper.classList.add('theme-gold');
+                    previewTotalLabel.innerText = 'Amount Paid';
+                    previewDueContainer.style.display = 'none';
+                    stamp.style.display = 'block';
+                    paymentContainer.style.display = 'none'; 
+                } else {
+                    paper.classList.add('theme-green');
+                    previewTotalLabel.innerText = 'Total Amount';
+                    if (inputDueDate.value) previewDueContainer.style.display = 'block';
+                }
+            }
+            inputDocType.addEventListener('change', window.updateDocType);
+
+            // 2. Load Saved Data
+            const savedData = JSON.parse(localStorage.getItem('naijaBillingProfile')) || {};
+            const inputs = {
+                business: document.getElementById('input-business'),
+                slogan: document.getElementById('input-slogan'),
+                address: document.getElementById('input-address'),
+                phone: document.getElementById('input-phone'),
+                email: document.getElementById('input-email'),
+                payment: document.getElementById('input-payment'),
+                logo: document.getElementById('preview-logo'),
+                signature: document.getElementById('preview-signature')
+            };
+
+            const previews = {
+                business: document.getElementById('preview-business'),
+                slogan: document.getElementById('preview-slogan'),
+                address: document.getElementById('preview-address'),
+                phone: document.getElementById('preview-phone'),
+                email: document.getElementById('preview-email'),
+                payment: document.getElementById('preview-payment')
+            };
+
+            for (const key in savedData) {
+                if (inputs[key] && savedData[key]) {
+                    if (key === 'logo' || key === 'signature') {
+                        inputs[key].src = savedData[key];
+                        inputs[key].style.display = 'block';
+                    } else {
+                        inputs[key].value = savedData[key];
+                        previews[key].innerText = savedData[key];
+                    }
+                }
+            }
+
+            function saveProfile() {
+                const profile = {
+                    business: inputs.business.value, slogan: inputs.slogan.value, address: inputs.address.value,
+                    phone: inputs.phone.value, email: inputs.email.value, payment: inputs.payment.value,
+                    logo: inputs.logo.src.startsWith('data:') ? inputs.logo.src : null,
+                    signature: inputs.signature.src.startsWith('data:') ? inputs.signature.src : null
+                };
+                localStorage.setItem('naijaBillingProfile', JSON.stringify(profile));
+            }
+
+            ['business', 'slogan', 'address', 'phone', 'email', 'payment'].forEach(key => {
+                inputs[key].addEventListener('input', (e) => {
+                    previews[key].innerText = e.target.value || '...';
+                    saveProfile();
+                });
+            });
+
+            ['logo', 'signature'].forEach(key => {
+                document.getElementById(`input-${key}`).addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = function(event) {
+                            inputs[key].src = event.target.result;
+                            inputs[key].style.display = 'block';
+                            saveProfile();
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+            });
+
+            // 3. Client & Meta Details
+            const inputClient = document.getElementById('input-client');
+            const inputInvNum = document.getElementById('input-inv-num');
+            const inputDate = document.getElementById('input-date');
+            const previewClient = document.getElementById('preview-client');
+            const previewInvNum = document.getElementById('preview-inv-num');
+            const previewDate = document.getElementById('preview-date');
+
+            inputClient.addEventListener('input', (e) => { previewClient.innerText = e.target.value || 'Client Name'; });
+            inputInvNum.addEventListener('input', (e) => { previewInvNum.innerText = e.target.value || 'DOC-001'; });
+            
+            window.formatDate = function(val) {
+                if (!val) return '--/--/----';
+                const d = new Date(val);
+                return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+            };
+
+            inputDate.addEventListener('input', (e) => { previewDate.innerText = window.formatDate(e.target.value); });
+            inputDueDate.addEventListener('input', (e) => {
+                previewDueDate.innerText = window.formatDate(e.target.value);
+                if (inputDocType.value !== 'RECEIPT' && e.target.value) previewDueContainer.style.display = 'block';
+                else previewDueContainer.style.display = 'none';
+            });
+
+            // 4. Line Items Logic
+            const itemsContainer = document.getElementById('items-container');
+            const previewItems = document.getElementById('preview-items');
+            const previewGrandTotal = document.getElementById('preview-grand-total');
+            window.itemIdCounter = 0;
+
+            window.addItemRow = function(desc = '', qty = 1, rate = 0) {
+                window.itemIdCounter++;
+                const id = window.itemIdCounter;
+
+                const row = document.createElement('div');
+                row.className = 'item-row';
+                row.id = `input-row-${id}`;
+                row.innerHTML = `
+                    <input type="text" placeholder="Item description" id="desc-${id}" value="${desc}">
+                    <input type="number" class="qty" placeholder="Qty" value="${qty}" min="1" id="qty-${id}">
+                    <input type="number" class="rate" placeholder="Rate" value="${rate}" id="rate-${id}">
+                    <button class="btn-delete" id="delete-${id}">✕</button>
+                `;
+                itemsContainer.appendChild(row);
+
+                const tr = document.createElement('tr');
+                tr.id = `preview-row-${id}`;
+                tr.innerHTML = `
+                    <td id="preview-desc-${id}">${desc || 'Item description'}</td>
+                    <td class="text-right" id="preview-qty-${id}">${qty}</td>
+                    <td class="text-right" id="preview-rate-${id}">${parseFloat(rate).toLocaleString('en-NG', {minimumFractionDigits: 2})}</td>
+                    <td class="text-right" id="preview-total-${id}">${(qty * rate).toLocaleString('en-NG', {minimumFractionDigits: 2})}</td>
+                `;
+                previewItems.appendChild(tr);
+
+                document.getElementById(`desc-${id}`).addEventListener('input', (e) => {
+                    document.getElementById(`preview-desc-${id}`).innerText = e.target.value || 'Item description';
+                });
+                
+                const updateMath = () => {
+                    const q = parseFloat(document.getElementById(`qty-${id}`).value) || 0;
+                    const r = parseFloat(document.getElementById(`rate-${id}`).value) || 0;
+                    const total = q * r;
+                    
+                    document.getElementById(`preview-qty-${id}`).innerText = q;
+                    document.getElementById(`preview-rate-${id}`).innerText = r.toLocaleString('en-NG', {minimumFractionDigits: 2});
+                    document.getElementById(`preview-total-${id}`).innerText = total.toLocaleString('en-NG', {minimumFractionDigits: 2});
+                    window.calculateGrandTotal();
+                };
+
+                document.getElementById(`qty-${id}`).addEventListener('input', updateMath);
+                document.getElementById(`rate-${id}`).addEventListener('input', updateMath);
+
+                document.getElementById(`delete-${id}`).addEventListener('click', () => {
+                    document.getElementById(`input-row-${id}`).remove();
+                    document.getElementById(`preview-row-${id}`).remove();
+                    window.calculateGrandTotal();
+                });
+                
+                window.calculateGrandTotal(); 
+            }
+
+            window.calculateGrandTotal = function() {
+                let grandTotal = 0;
+                const allQtys = document.querySelectorAll('.item-row .qty');
+                const allRates = document.querySelectorAll('.item-row .rate');
+                
+                for (let i = 0; i < allQtys.length; i++) {
+                    const qty = parseFloat(allQtys[i].value) || 0;
+                    const rate = parseFloat(allRates[i].value) || 0;
+                    grandTotal += (qty * rate);
+                }
+                previewGrandTotal.innerText = grandTotal.toLocaleString('en-NG', {minimumFractionDigits: 2});
+            }
+
+            window.addItemRow();
+            document.getElementById('btn-add-item').addEventListener('click', () => window.addItemRow());
+
+            // 5. Save to History Logic
+            document.getElementById('btn-save-history').addEventListener('click', () => {
+                const docType = inputDocType.value;
+                const client = inputClient.value;
+                const docNum = inputInvNum.value;
+                
+                if (!client || !docNum) {
+                    alert("Please fill in Client Name and Document No. before saving.");
+                    return;
+                }
+
+                const items = [];
+                document.querySelectorAll('.item-row').forEach(row => {
+                    const desc = row.querySelector('input[type="text"]').value;
+                    const qty = row.querySelector('.qty').value;
+                    const rate = row.querySelector('.rate').value;
+                    if (desc) items.push({ desc, qty, rate });
+                });
+
+                const docData = {
+                    id: Date.now(),
+                    type: docType,
+                    client: client,
+                    docNum: docNum,
+                    date: inputDate.value,
+                    dueDate: inputDueDate.value,
+                    items: items
+                };
+
+                let history = JSON.parse(localStorage.getItem('naijaBillingHistory')) || [];
+                history.push(docData);
+                localStorage.setItem('naijaBillingHistory', JSON.stringify(history));
+                
+                alert("Document saved to History! You can find it in the History tab.");
+            });
+
+            // 6. Reset Button
+            document.getElementById('btn-reset').addEventListener('click', () => {
+                if (confirm("Clear this document? (Your business profile will be saved)")) {
+                    document.querySelectorAll('.item-row').forEach(el => el.remove());
+                    document.querySelectorAll('#preview-items tr').forEach(el => el.remove());
+                    window.itemIdCounter = 0;
+                    inputClient.value = ''; inputInvNum.value = ''; inputDate.value = ''; inputDueDate.value = '';
+                    previewClient.innerText = 'Client Name'; previewInvNum.innerText = 'DOC-001'; previewDate.innerText = '--/--/----'; previewDueDate.innerText = '--/--/----'; previewDueContainer.style.display = 'none';
+                    inputDocType.value = 'QUOTATION'; 
+                    window.updateDocType();
+                    window.addItemRow();
+                    window.calculateGrandTotal();
+                }
+            });
+
+            // 7. Generate PDF with Smart Filename
+            document.getElementById('btn-generate').addEventListener('click', () => {
+                const element = document.getElementById('invoice-paper');
+                
+                const clientName = inputClient.value.trim();
+                const firstName = clientName ? clientName.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '') : 'Client';
+                
+                const docType = inputDocType.value;
+                const formattedType = docType.charAt(0).toUpperCase() + docType.slice(1).toLowerCase();
+                
+                const businessName = inputs.business.value.trim();
+                const formattedCompany = businessName ? businessName.replace(/[^a-zA-Z0-9]/g, '_') : 'Company';
+
+                const finalFilename = `${firstName}-${formattedType}-${formattedCompany}.pdf`;
+
+                const opt = {
+                    margin:       0,
+                    filename:     finalFilename,
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2, useCORS: true },
+                    jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+                };
+                html2pdf().set(opt).from(element).save();
+            });
+        });
+    </script>
+    <script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js'); // Changed to relative path
+    });
+}
+    </script>    
+</body>
+</html>
